@@ -1,0 +1,71 @@
+name: PayFlow CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespassword
+          POSTGRES_DB: payflow_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Typecheck Backend
+        run: |
+          cd backend
+          npx tsc --noEmit
+
+      - name: Typecheck Frontend
+        run: |
+          cd frontend
+          npx tsc --noEmit
+
+      - name: Build Backend
+        run: |
+          cd backend
+          npx prisma generate
+          npm run build
+
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Run Backend Tests
+        env:
+          DATABASE_URL: "postgresql://postgres:postgrespassword@localhost:5432/payflow_test?schema=public"
+          PORT: 3000
+          COOKIE_SECRET: "super-secret-cookie-signing-key-32-chars-long"
+          NODE_ENV: test
+        run: |
+          cd backend
+          npx prisma migrate deploy
+          npm run test

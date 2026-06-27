@@ -1,0 +1,12 @@
+{
+  "name": "payflow",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "build:all": "npm run build --workspaces",
+    "test:all": "npm run test --workspaces"
+  }
+}

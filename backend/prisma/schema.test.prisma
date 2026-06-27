@@ -1,0 +1,76 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./test.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Organization {
+  id        String         @id @default(uuid())
+  name      String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  users     User[]
+  claims    ExpenseClaim[]
+}
+
+model User {
+  id             String         @id @default(uuid())
+  organizationId String
+  name           String
+  email          String         @unique
+  passwordHash   String
+  role           String // ENUM mapped to string for SQLite compatibility
+  createdAt      DateTime       @default(now())
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  claims         ExpenseClaim[] @relation("CreatedClaims")
+  auditLogs      AuditLog[]
+  sessions       Session[]
+
+  @@index([organizationId])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model ExpenseClaim {
+  id             String     @id @default(uuid())
+  organizationId String
+  createdById    String
+  amount         Decimal    // SQLite ignores precision, but Prisma supports Decimal type mapping
+  category       String
+  description    String
+  status         String     @default("DRAFT") // ENUM mapped to string for SQLite compatibility
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User       @relation("CreatedClaims", fields: [createdById], references: [id], onDelete: Cascade)
+  auditLogs      AuditLog[]
+
+  @@index([organizationId])
+  @@index([createdById])
+  @@index([status])
+}
+
+model AuditLog {
+  id           String       @id @default(uuid())
+  claimId      String
+  changedById  String
+  fromStatus   String // ENUM mapped to string for SQLite compatibility
+  toStatus     String // ENUM mapped to string for SQLite compatibility
+  note         String?
+  createdAt    DateTime     @default(now())
+  claim        ExpenseClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  changedBy    User         @relation(fields: [changedById], references: [id], onDelete: Cascade)
+
+  @@index([claimId])
+}

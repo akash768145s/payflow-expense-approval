@@ -1,0 +1,90 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  EMPLOYEE
+  MANAGER
+  FINANCE
+}
+
+enum Status {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PAID
+}
+
+model Organization {
+  id        String         @id @default(uuid())
+  name      String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  users     User[]
+  claims    ExpenseClaim[]
+}
+
+model User {
+  id             String         @id @default(uuid())
+  organizationId String
+  name           String
+  email          String         @unique
+  passwordHash   String
+  role           Role
+  createdAt      DateTime       @default(now())
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  claims         ExpenseClaim[] @relation("CreatedClaims")
+  auditLogs      AuditLog[]
+  sessions       Session[]
+
+  @@index([organizationId])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model ExpenseClaim {
+  id             String     @id @default(uuid())
+  organizationId String
+  createdById    String
+  amount         Decimal    @db.Decimal(10, 2)
+  category       String
+  description    String     @db.VarChar(1000)
+  status         Status     @default(DRAFT)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User       @relation("CreatedClaims", fields: [createdById], references: [id], onDelete: Cascade)
+  auditLogs      AuditLog[]
+
+  @@index([organizationId])
+  @@index([createdById])
+  @@index([status])
+}
+
+model AuditLog {
+  id           String       @id @default(uuid())
+  claimId      String
+  changedById  String
+  fromStatus   Status
+  toStatus     Status
+  note         String?      @db.VarChar(1000)
+  createdAt    DateTime     @default(now())
+  claim        ExpenseClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  changedBy    User         @relation(fields: [changedById], references: [id], onDelete: Cascade)
+
+  @@index([claimId])
+}
