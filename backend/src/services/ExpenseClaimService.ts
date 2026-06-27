@@ -237,4 +237,42 @@ export class ExpenseClaimService {
 
     return updatedClaim;
   }
+
+  async sendBackClaim(id: string, currentUser: User, reason: string): Promise<ExpenseClaim> {
+    const claim = await this.getClaim(id, currentUser);
+
+    if (currentUser.role !== Role.MANAGER) {
+      throw new ForbiddenError('Only managers can send back claims for revision');
+    }
+
+    if (!reason || reason.trim().length < 10) {
+      throw new BadRequestError('Reason must be at least 10 characters long');
+    }
+
+    if (reason.trim().length > 500) {
+      throw new BadRequestError('Reason cannot exceed 500 characters');
+    }
+
+    // State machine check
+    this.stateMachineService.validateTransition(claim.status as Status, Status.DRAFT);
+
+    const updatedClaim = await this.claimRepository.updateClaim(id, { status: Status.DRAFT });
+
+    // Create Audit Log
+    await this.auditLogRepository.createLog({
+      claimId: id,
+      changedById: currentUser.id,
+      fromStatus: claim.status as Status,
+      toStatus: Status.DRAFT,
+      note: reason,
+    });
+
+    // Fetch fresh claim with relations updated
+    const freshClaim = await this.claimRepository.findById(id, currentUser.organizationId);
+    if (!freshClaim) {
+      throw new NotFoundError('Expense claim not found after update');
+    }
+
+    return freshClaim;
+  }
 }

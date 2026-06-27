@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { ExpenseClaimService } from '../services/ExpenseClaimService';
-import { createClaimSchema, updateClaimSchema, actionNoteSchema } from '../validators';
+import { createClaimSchema, updateClaimSchema, actionNoteSchema, sendBackSchema } from '../validators';
 import { BadRequestError } from '../utils/errors';
 
 export class ExpenseClaimController {
@@ -82,6 +82,17 @@ export class ExpenseClaimController {
     const note = parseResult.success ? parseResult.data.note : undefined;
 
     const claim = await this.claimService.markPaidClaim(id, request.currentUser!, note);
+    return { claim };
+  };
+
+  sendBackClaim = async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const parseResult = sendBackSchema.safeParse(request.body);
+    if (!parseResult.success) {
+      throw new BadRequestError(parseResult.error.errors[0].message);
+    }
+
+    const claim = await this.claimService.sendBackClaim(id, request.currentUser!, parseResult.data.reason);
     return { claim };
   };
 }

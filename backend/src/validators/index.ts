@@ -20,3 +20,11 @@ export const updateClaimSchema = z.object({
 export const actionNoteSchema = z.object({
   note: z.string().max(1000, 'Note must not exceed 1000 characters').optional(),
 });
+
+export const sendBackSchema = z.object({
+  reason: z.string({
+    required_error: 'Reason is required',
+  })
+  .min(10, 'Reason must be at least 10 characters')
+  .max(500, 'Reason must not exceed 500 characters'),
+});

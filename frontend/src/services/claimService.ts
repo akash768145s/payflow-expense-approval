@@ -56,4 +56,9 @@ export const claimService = {
     const response = await api.post<{ claim: ExpenseClaim }>(`/claims/${id}/mark-paid`, { note });
     return response.data;
   },
+
+  async sendBackClaim(id: string, reason: string): Promise<{ claim: ExpenseClaim }> {
+    const response = await api.post<{ claim: ExpenseClaim }>(`/claims/${id}/send-back`, { reason });
+    return response.data;
+  },
 };

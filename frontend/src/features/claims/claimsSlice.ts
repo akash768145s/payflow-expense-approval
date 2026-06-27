@@ -128,6 +128,18 @@ export const markPaidClaim = createAsyncThunk(
   }
 );
 
+export const sendBackClaim = createAsyncThunk(
+  'claims/sendBackClaim',
+  async (payload: { id: string; reason: string }, { rejectWithValue }) => {
+    try {
+      const data = await claimService.sendBackClaim(payload.id, payload.reason);
+      return data.claim;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.message || 'Failed to send back claim');
+    }
+  }
+);
+
 const claimsSlice = createSlice({
   name: 'claims',
   initialState,
@@ -198,7 +210,7 @@ const claimsSlice = createSlice({
       })
       .addCase(deleteClaim.rejected, setRejected)
 
-      // Submit, Approve, Reject, Pay - all return updated claims and should update state list & details
+      // Submit, Approve, Reject, Pay, SendBack - all return updated claims and should update state list & details
       .addMatcher(
         (action) =>
           [
@@ -206,6 +218,7 @@ const claimsSlice = createSlice({
             approveClaim.fulfilled.type,
             rejectClaim.fulfilled.type,
             markPaidClaim.fulfilled.type,
+            sendBackClaim.fulfilled.type,
           ].includes(action.type),
         (state, action: PayloadAction<ExpenseClaim>) => {
           state.loading = false;
@@ -222,6 +235,7 @@ const claimsSlice = createSlice({
             approveClaim.pending.type,
             rejectClaim.pending.type,
             markPaidClaim.pending.type,
+            sendBackClaim.pending.type,
           ].includes(action.type),
         setPending
       )
@@ -232,6 +246,7 @@ const claimsSlice = createSlice({
             approveClaim.rejected.type,
             rejectClaim.rejected.type,
             markPaidClaim.rejected.type,
+            sendBackClaim.rejected.type,
           ].includes(action.type),
         setRejected
       );

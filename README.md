@@ -64,6 +64,9 @@ Claims status transitions are strictly governed by a dedicated state machine ser
 - `DRAFT` ➔ `SUBMITTED`
 - `SUBMITTED` ➔ `APPROVED` or `REJECTED`
 - `APPROVED` ➔ `PAID`
+- `APPROVED` ➔ `DRAFT` (Action: Send Back for Revision, Manager only)
+
+Managers cannot undo a payment. However, before Finance marks a claim as PAID, a manager may send an APPROVED claim back to the employee for correction. This preserves the audit trail while allowing accidental approvals to be corrected without creating accounting inconsistencies.
 
 Any invalid transition (e.g. `PAID` ➔ `APPROVED`, or `REJECTED` ➔ `APPROVED`) throws a `409 Conflict` error. Every status change creates a record in the `AuditLog` table.
 

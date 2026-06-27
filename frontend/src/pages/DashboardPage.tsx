@@ -11,6 +11,7 @@ import {
   approveClaim,
   rejectClaim,
   markPaidClaim,
+  sendBackClaim,
   fetchClaimDetails,
   clearCurrentClaim,
 } from '../features/claims/claimsSlice';
@@ -65,7 +66,22 @@ import {
   Trash2,
   Check,
   X,
+  CornerUpLeft,
 } from 'lucide-react';
+
+const isReturnedForRevision = (claim: ExpenseClaim) => {
+  if (claim.status !== 'DRAFT') return false;
+  const logs = claim.auditLogs || [];
+  const latestDraftLog = logs.find((l) => l.toStatus === 'DRAFT');
+  return latestDraftLog?.fromStatus === 'APPROVED';
+};
+
+const isFromStatusRevision = (currentLog: any, allLogs: any[]) => {
+  if (currentLog.fromStatus !== 'DRAFT') return false;
+  const currentIdx = allLogs.findIndex((l) => l.id === currentLog.id);
+  const earlierLogs = allLogs.slice(currentIdx + 1);
+  return earlierLogs.some((l) => l.toStatus === 'DRAFT' && l.fromStatus === 'APPROVED');
+};
 
 export const DashboardPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -118,6 +134,11 @@ export const DashboardPage: React.FC = () => {
   const [noteClaimId, setNoteClaimId] = useState('');
   const [noteAction, setNoteAction] = useState<'submit' | 'approve' | 'reject' | 'pay' | null>(null);
   const [noteText, setNoteText] = useState('');
+
+  // Send Back dialog state
+  const [sendBackOpen, setSendBackOpen] = useState(false);
+  const [sendBackClaimId, setSendBackClaimId] = useState('');
+  const [sendBackReason, setSendBackReason] = useState('');
 
   // AlertDialog states (replaces window.confirm)
   const [alertOpen, setAlertOpen] = useState(false);
@@ -200,6 +221,24 @@ export const DashboardPage: React.FC = () => {
       }
     });
     setAlertOpen(true);
+  };
+
+  const handleOpenSendBack = (id: string) => {
+    setSendBackClaimId(id);
+    setSendBackReason('');
+    setSendBackOpen(true);
+  };
+
+  const handleSendBackSubmit = async () => {
+    if (!sendBackClaimId || sendBackReason.trim().length < 10 || sendBackReason.trim().length > 500) return;
+
+    try {
+      await dispatch(sendBackClaim({ id: sendBackClaimId, reason: sendBackReason })).unwrap();
+      dispatch(addToast({ type: 'success', message: 'Claim returned for revision' }));
+      setSendBackOpen(false);
+    } catch (err: any) {
+      dispatch(addToast({ type: 'error', message: err || 'Failed to send back claim' }));
+    }
   };
 
   const handleOpenNoteModal = (id: string, action: 'submit' | 'approve' | 'reject' | 'pay') => {
@@ -499,6 +538,7 @@ export const DashboardPage: React.FC = () => {
       {(activeView === 'dashboard' || activeView === 'my-claims' || activeView === 'approvals' || activeView === 'payments') &&
         renderStatsGrid()}
 
+
       {/* 3. CONDITIONAL VIEWS RENDERING */}
 
       {/* VIEW A: Main Dashboard Overview */}
@@ -544,14 +584,28 @@ export const DashboardPage: React.FC = () => {
                       claims.slice(0, 5).map((claim) => (
                         <TableRow key={claim.id}>
                           {user?.role !== 'EMPLOYEE' && (
-                            <TableCell className="w-1/3 font-semibold text-slate-900 dark:text-slate-100">
-                              {claim.createdBy?.name}
+                            <TableCell className="w-1/3">
+                              <div>
+                                <div className="font-semibold text-slate-900 dark:text-slate-100">
+                                  {claim.createdBy?.name}
+                                </div>
+                                {user?.role === 'FINANCE' && claim.auditLogs?.find((l) => l.toStatus === 'APPROVED')?.changedBy?.name && (
+                                  <div className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center">
+                                    <span className="h-1 w-1 rounded-full bg-emerald-500 mr-1 inline-block"></span>
+                                    Approved by {claim.auditLogs.find((l) => l.toStatus === 'APPROVED')?.changedBy?.name}
+                                  </div>
+                                )}
+                              </div>
                             </TableCell>
                           )}
                           <TableCell>{claim.category}</TableCell>
                           <TableCell className="w-[140px] font-bold">{formatCurrency(claim.amount)}</TableCell>
                           <TableCell className="w-[140px]">
-                            <Badge variant={getStatusVariant(claim.status)}>{claim.status}</Badge>
+                            {isReturnedForRevision(claim) ? (
+                              <Badge variant="revision">REVISION</Badge>
+                            ) : (
+                              <Badge variant={getStatusVariant(claim.status)}>{claim.status}</Badge>
+                            )}
                           </TableCell>
                           <TableCell className="w-[100px] text-right">
                             <Button onClick={() => handleOpenDetails(claim.id)} className="h-8 w-8 p-0 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-700 dark:bg-slate-900/40 dark:text-slate-350 dark:hover:bg-slate-800/60 border border-slate-200 dark:border-slate-800 rounded-lg shadow-none active:scale-95 duration-100 transition-all" title="View Detail">
@@ -641,7 +695,11 @@ export const DashboardPage: React.FC = () => {
                         {formatCurrency(claim.amount)}
                       </TableCell>
                       <TableCell className="w-[140px]">
-                        <Badge variant={getStatusVariant(claim.status)}>{claim.status}</Badge>
+                        {isReturnedForRevision(claim) ? (
+                          <Badge variant="revision">REVISION</Badge>
+                        ) : (
+                          <Badge variant={getStatusVariant(claim.status)}>{claim.status}</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="w-[180px] text-xs text-slate-500">{formatDate(claim.createdAt)}</TableCell>
                       <TableCell className="w-[180px] text-right">
@@ -729,7 +787,11 @@ export const DashboardPage: React.FC = () => {
                           {formatCurrency(claim.amount)}
                         </TableCell>
                         <TableCell className="w-[140px]">
-                          <Badge variant={getStatusVariant(claim.status)}>{claim.status}</Badge>
+                          {isReturnedForRevision(claim) ? (
+                            <Badge variant="revision">REVISION</Badge>
+                          ) : (
+                            <Badge variant={getStatusVariant(claim.status)}>{claim.status}</Badge>
+                          )}
                         </TableCell>
                         <TableCell className="w-[180px] text-right">
                           <div className="flex items-center justify-end space-x-2">
@@ -745,6 +807,16 @@ export const DashboardPage: React.FC = () => {
                             ) : claim.createdById === user.id && claim.status === 'SUBMITTED' ? (
                               <span className="text-xs text-slate-400 italic mr-2 bg-slate-50 dark:bg-slate-800 px-2.5 py-1 rounded-md">Self-created</span>
                             ) : null}
+                            {claim.status === 'APPROVED' && user?.role === 'MANAGER' && (
+                              <Button
+                                onClick={() => handleOpenSendBack(claim.id)}
+                                className="h-8 bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 dark:hover:bg-amber-950/40 border border-amber-100 dark:border-amber-900/30 rounded-lg shadow-none active:scale-95 duration-100 transition-all px-2.5 space-x-1"
+                                title="Send Back For Revision"
+                              >
+                                <CornerUpLeft className="h-3.5 w-3.5" />
+                                <span className="text-xs font-bold">Send Back</span>
+                              </Button>
+                            )}
                             <Button onClick={() => handleOpenDetails(claim.id)} className="h-8 w-8 p-0 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-700 dark:bg-slate-900/40 dark:text-slate-350 dark:hover:bg-slate-800/60 border border-slate-200 dark:border-slate-800 rounded-lg shadow-none active:scale-95 duration-100 transition-all" title="View details">
                               <Eye className="h-4 w-4" />
                             </Button>
@@ -807,6 +879,12 @@ export const DashboardPage: React.FC = () => {
                               {claim.createdBy?.name}
                             </div>
                             <div className="text-xs text-slate-500">{claim.createdBy?.email}</div>
+                            {claim.auditLogs?.find((l) => l.toStatus === 'APPROVED')?.changedBy?.name && (
+                              <div className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1.5 inline-block"></span>
+                                Approved by {claim.auditLogs.find((l) => l.toStatus === 'APPROVED')?.changedBy?.name}
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="w-[150px]">{claim.category}</TableCell>
@@ -917,6 +995,22 @@ export const DashboardPage: React.FC = () => {
           </DialogHeader>
 
           <form onSubmit={handleSaveClaim} className="space-y-4 my-2">
+            {editingClaim && isReturnedForRevision(editingClaim) && (
+              (() => {
+                const latestLog = editingClaim.auditLogs?.find((l) => l.toStatus === 'DRAFT' && l.fromStatus === 'APPROVED');
+                const managerName = latestLog?.changedBy?.name || 'A manager';
+                return latestLog?.note ? (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/30 rounded-xl text-xs space-y-1">
+                    <div className="font-bold text-amber-850 dark:text-amber-300">
+                      Returned for Revision by {managerName}:
+                    </div>
+                    <div className="text-slate-700 dark:text-slate-350 italic">
+                      &ldquo;{latestLog.note}&rdquo;
+                    </div>
+                  </div>
+                ) : null;
+              })()
+            )}
             <div className="space-y-1.5">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Amount (USD)</label>
               <div className="relative">
@@ -1025,6 +1119,47 @@ export const DashboardPage: React.FC = () => {
         </DialogContent>
       </Dialog>
 
+      {/* SEND BACK FOR REVISION DIALOG */}
+      <Dialog open={sendBackOpen} onOpenChange={setSendBackOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Back For Revision</DialogTitle>
+            <DialogDescription>
+              This claim will return to Draft so the employee can edit and resubmit it.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 my-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-500 font-bold">Reason *</label>
+              <Textarea
+                value={sendBackReason}
+                onChange={(e) => setSendBackReason(e.target.value)}
+                maxLength={500}
+                rows={3}
+                placeholder="Approved by mistake. Please attach the missing hotel invoice."
+              />
+              <div className="text-[10px] text-slate-400">
+                Minimum 10 characters, maximum 500 characters. Current: {sendBackReason.trim().length} chars.
+              </div>
+            </div>
+
+            <DialogFooter className="pt-4">
+              <Button variant="outline" onClick={() => setSendBackOpen(false)} className="rounded-xl">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSendBackSubmit}
+                disabled={sendBackReason.trim().length < 10 || sendBackReason.trim().length > 505}
+                className="bg-amber-600 hover:bg-amber-500 text-white rounded-xl shadow-sm"
+              >
+                Send Back
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* CONFIRMATION ALERT DIALOG (REPLACES WINDOW.CONFIRM) */}
       <AlertDialog open={alertOpen} onOpenChange={setAlertOpen}>
         <AlertDialogContent>
@@ -1066,7 +1201,11 @@ export const DashboardPage: React.FC = () => {
                   <div>
                     <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">Status</span>
                     <div className="mt-1">
-                      <Badge variant={getStatusVariant(currentClaim.status)}>{currentClaim.status}</Badge>
+                      {isReturnedForRevision(currentClaim) ? (
+                        <Badge variant="revision">REVISION</Badge>
+                      ) : (
+                        <Badge variant={getStatusVariant(currentClaim.status)}>{currentClaim.status}</Badge>
+                      )}
                     </div>
                   </div>
                   <div>
@@ -1102,8 +1241,14 @@ export const DashboardPage: React.FC = () => {
                           </div>
                           
                           <p className="text-[11px] font-semibold mt-1">
-                            Changed status from <span className="text-slate-500 font-bold">{log.fromStatus}</span> ➔{' '}
-                            <span className="text-indigo-600 dark:text-indigo-400 font-bold">{log.toStatus}</span>
+                            Changed status from{' '}
+                            <span className="text-slate-500 font-bold">
+                              {isFromStatusRevision(log, currentClaim.auditLogs || []) ? 'REVISION' : log.fromStatus}
+                            </span>{' '}
+                            ➔{' '}
+                            <span className="text-indigo-600 dark:text-indigo-400 font-bold">
+                              {log.toStatus === 'DRAFT' && log.fromStatus === 'APPROVED' ? 'REVISION' : log.toStatus}
+                            </span>
                           </p>
                           
                           {log.note && (
@@ -1119,8 +1264,20 @@ export const DashboardPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <DialogFooter className="p-4 bg-slate-50 dark:bg-slate-900/60 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-                <Button variant="outline" onClick={handleCloseDetails} className="rounded-xl w-full sm:w-auto">
+              <DialogFooter className="p-4 bg-slate-50 dark:bg-slate-900/60 border-t border-slate-100 dark:border-slate-800 flex flex-col-reverse sm:flex-row justify-between items-center gap-2">
+                {currentClaim.status === 'APPROVED' && user?.role === 'MANAGER' && (
+                  <Button
+                    onClick={() => {
+                      handleCloseDetails();
+                      handleOpenSendBack(currentClaim.id);
+                    }}
+                    className="w-full sm:w-auto bg-amber-600 hover:bg-amber-500 text-white rounded-xl shadow-sm px-4 space-x-1.5"
+                  >
+                    <CornerUpLeft className="h-4 w-4" />
+                    <span>Send Back for Revision</span>
+                  </Button>
+                )}
+                <Button variant="outline" onClick={handleCloseDetails} className="rounded-xl w-full sm:w-auto ml-auto">
                   Close Details
                 </Button>
               </DialogFooter>

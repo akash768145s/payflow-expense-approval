@@ -5,7 +5,7 @@ export class StateMachineService {
   private allowedTransitions: Record<Status, Status[]> = {
     [Status.DRAFT]: [Status.SUBMITTED],
     [Status.SUBMITTED]: [Status.APPROVED, Status.REJECTED],
-    [Status.APPROVED]: [Status.PAID],
+    [Status.APPROVED]: [Status.PAID, Status.DRAFT],
     [Status.REJECTED]: [],
     [Status.PAID]: [],
   };

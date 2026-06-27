@@ -55,5 +55,6 @@ export async function registerRoutes(fastify: FastifyInstance) {
   fastify.post('/claims/:id/approve', { preHandler: [authMiddleware] }, claimController.approveClaim);
   fastify.post('/claims/:id/reject', { preHandler: [authMiddleware] }, claimController.rejectClaim);
   fastify.post('/claims/:id/mark-paid', { preHandler: [authMiddleware] }, claimController.markPaidClaim);
+  fastify.post('/claims/:id/send-back', { preHandler: [authMiddleware] }, claimController.sendBackClaim);
 }
 export type AppRoutesType = typeof registerRoutes;

@@ -138,4 +138,109 @@ describe('State Machine & Auditing API', () => {
     });
     expect(approveRes.statusCode).toBe(409);
   });
+
+  it('should test "Send Back for Revision" workflow and constraints', async () => {
+    // 1. Create a claim
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/claims',
+      headers: { cookie: empCookie },
+      payload: { amount: 150, category: 'Meals', description: 'Business Dinner' },
+    });
+    const claimId = JSON.parse(createRes.body).claim.id;
+
+    // Submit and Approve
+    await app.inject({ method: 'POST', url: `/claims/${claimId}/submit`, headers: { cookie: empCookie } });
+    await app.inject({ method: 'POST', url: `/claims/${claimId}/approve`, headers: { cookie: mgrCookie } });
+
+    // 2. FINANCE receives 403 when trying to send back
+    const finSendRes = await app.inject({
+      method: 'POST',
+      url: `/claims/${claimId}/send-back`,
+      headers: { cookie: finCookie },
+      payload: { reason: 'Wrong role sending back' },
+    });
+    expect(finSendRes.statusCode).toBe(403);
+
+    // 3. EMPLOYEE receives 403 when trying to send back
+    const empSendRes = await app.inject({
+      method: 'POST',
+      url: `/claims/${claimId}/send-back`,
+      headers: { cookie: empCookie },
+      payload: { reason: 'Employee sending back own' },
+    });
+    expect(empSendRes.statusCode).toBe(403);
+
+    // 4. Cannot send back another organization\'s claim
+    const otherMgrCookie = await getAuthCookie(app, 'mgrB@test.com');
+    const otherSendRes = await app.inject({
+      method: 'POST',
+      url: `/claims/${claimId}/send-back`,
+      headers: { cookie: otherMgrCookie },
+      payload: { reason: 'Cross organization send back reason' },
+    });
+    expect(otherSendRes.statusCode).toBe(404);
+
+    // 5. Manager successfully sends back APPROVED claim (reason too short)
+    const tooShortRes = await app.inject({
+      method: 'POST',
+      url: `/claims/${claimId}/send-back`,
+      headers: { cookie: mgrCookie },
+      payload: { reason: 'Short' },
+    });
+    expect(tooShortRes.statusCode).toBe(400);
+
+    // Now success send back
+    const sendBackRes = await app.inject({
+      method: 'POST',
+      url: `/claims/${claimId}/send-back`,
+      headers: { cookie: mgrCookie },
+      payload: { reason: 'Approved by mistake. Please attach the missing hotel invoice.' },
+    });
+    expect(sendBackRes.statusCode).toBe(200);
+    expect(JSON.parse(sendBackRes.body).claim.status).toBe('DRAFT');
+
+    // 6. Employee can edit returned claim
+    const editRes = await app.inject({
+      method: 'PATCH',
+      url: `/claims/${claimId}`,
+      headers: { cookie: empCookie },
+      payload: { amount: 140, category: 'Meals', description: 'Updated Business Dinner' },
+    });
+    expect(editRes.statusCode).toBe(200);
+    expect(Number(JSON.parse(editRes.body).claim.amount)).toBe(140);
+
+    // 7. Employee can resubmit returned claim
+    const resubmitRes = await app.inject({
+      method: 'POST',
+      url: `/claims/${claimId}/submit`,
+      headers: { cookie: empCookie },
+    });
+    expect(resubmitRes.statusCode).toBe(200);
+    expect(JSON.parse(resubmitRes.body).claim.status).toBe('SUBMITTED');
+
+    // Approve again to test PAID cannot be sent back
+    await app.inject({ method: 'POST', url: `/claims/${claimId}/approve`, headers: { cookie: mgrCookie } });
+    await app.inject({ method: 'POST', url: `/claims/${claimId}/mark-paid`, headers: { cookie: finCookie } });
+
+    // 8. Cannot send back PAID claim
+    const paidSendRes = await app.inject({
+      method: 'POST',
+      url: `/claims/${claimId}/send-back`,
+      headers: { cookie: mgrCookie },
+      payload: { reason: 'Try to send back paid claim' },
+    });
+    expect(paidSendRes.statusCode).toBe(409);
+
+    // 9. Fetch details and verify Audit log entry is created
+    const detailsRes = await app.inject({
+      method: 'GET',
+      url: `/claims/${claimId}`,
+      headers: { cookie: empCookie },
+    });
+    const claim = JSON.parse(detailsRes.body).claim;
+    const sendBackLog = claim.auditLogs.find((l: any) => l.fromStatus === 'APPROVED' && l.toStatus === 'DRAFT');
+    expect(sendBackLog).toBeDefined();
+    expect(sendBackLog.note).toBe('Approved by mistake. Please attach the missing hotel invoice.');
+  });
 });
