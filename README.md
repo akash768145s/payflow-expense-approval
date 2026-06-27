@@ -118,7 +118,7 @@ docker compose up --build
 Access the client dashboard at `http://localhost:8080`.
 
 - The database container holds persistent PG data.
-- The backend automatically applies migrations before boot.
+- The backend automatically applies migrations and seeds the database with sample tenant organizations, users (Employees, Managers, Finance), and claims on boot if it detects the database is empty.
 - All Axios requests are proxied from port `8080/api` to the backend on `3000` via Nginx, resolving CORS.
 
 ---

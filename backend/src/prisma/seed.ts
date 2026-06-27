@@ -5,9 +5,17 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding database...');
+  console.log('Checking database state...');
+  
+  const orgCount = await prisma.organization.count();
+  if (orgCount > 0) {
+    console.log('Database already contains data. Skipping seeding.');
+    return;
+  }
 
-  // Clean existing data
+  console.log('Database is empty. Seeding database...');
+
+  // Clean existing data just in case
   await prisma.auditLog.deleteMany();
   await prisma.session.deleteMany();
   await prisma.expenseClaim.deleteMany();
