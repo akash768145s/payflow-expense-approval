@@ -6,7 +6,20 @@ import { addToast } from '../features/ui/uiSlice';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
-import { Mail, Lock, Loader2, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, Loader2, ArrowRight, ShieldCheck, User, Briefcase, CreditCard } from 'lucide-react';
+
+const getButtonStyles = (role: string) => {
+  switch (role) {
+    case 'EMPLOYEE':
+      return 'border-blue-200/60 dark:border-blue-900/20 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300';
+    case 'MANAGER':
+      return 'border-amber-200/60 dark:border-amber-900/20 hover:border-amber-500 dark:hover:border-amber-500 hover:bg-amber-50/50 dark:hover:bg-amber-950/20 text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300';
+    case 'FINANCE':
+      return 'border-purple-200/60 dark:border-purple-900/20 hover:border-purple-500 dark:hover:border-purple-500 hover:bg-purple-50/50 dark:hover:bg-purple-950/20 text-purple-750 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300';
+    default:
+      return 'border-slate-200 dark:border-slate-800/80 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-600 dark:text-slate-300';
+  }
+};
 
 export const LoginPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -36,12 +49,12 @@ export const LoginPage: React.FC = () => {
   };
 
   const seedAccounts = [
-    { label: 'Acme - Employee (John)', email: 'john@acme.com' },
-    { label: 'Acme - Manager (Bob)', email: 'bob@acme.com' },
-    { label: 'Acme - Finance (David)', email: 'david@acme.com' },
-    { label: 'Globex - Employee (Jane)', email: 'jane@globex.com' },
-    { label: 'Globex - Manager (Frank)', email: 'frank@globex.com' },
-    { label: 'Globex - Finance (Henry)', email: 'henry@globex.com' },
+    { label: 'Acme - Employee (John)', email: 'john@acme.com', role: 'EMPLOYEE' },
+    { label: 'Acme - Manager (Bob)', email: 'bob@acme.com', role: 'MANAGER' },
+    { label: 'Acme - Finance (David)', email: 'david@acme.com', role: 'FINANCE' },
+    { label: 'Globex - Employee (Jane)', email: 'jane@globex.com', role: 'EMPLOYEE' },
+    { label: 'Globex - Manager (Frank)', email: 'frank@globex.com', role: 'MANAGER' },
+    { label: 'Globex - Finance (Henry)', email: 'henry@globex.com', role: 'FINANCE' },
   ];
 
   return (
@@ -124,16 +137,20 @@ export const LoginPage: React.FC = () => {
             <span>Autofill Sandbox Accounts</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {seedAccounts.map((account) => (
-              <button
-                key={account.email}
-                type="button"
-                onClick={() => handleAutofill(account.email)}
-                className="text-left text-xs p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-700 dark:text-slate-355 transition-all font-semibold"
-              >
-                {account.label}
-              </button>
-            ))}
+            {seedAccounts.map((account) => {
+              const Icon = account.role === 'EMPLOYEE' ? User : account.role === 'MANAGER' ? Briefcase : CreditCard;
+              return (
+                <button
+                  key={account.email}
+                  type="button"
+                  onClick={() => handleAutofill(account.email)}
+                  className={`text-left text-[11px] p-2.5 rounded-xl border flex items-center space-x-2.5 transition-all font-bold shadow-none active:scale-[0.97] duration-100 ${getButtonStyles(account.role)}`}
+                >
+                  <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span className="truncate">{account.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </CardContent>
